@@ -1,0 +1,43 @@
+{
+    "seed": 42,
+    "mode": "process",
+    "dataset": {
+      "path": "Anthropic/red-team-attempts",
+      "split_ratios": {
+        "train": 0.7,
+        "test": 0.15,
+        "validation": 0.15
+      },
+      "store_dir": "./data/dataset"
+    },
+    "llama_guard": {
+      "default_model_path": "meta-llama/Meta-Llama-Guard-3-8B",
+      "base_model_path": "meta-llama/Meta-Llama-Guard-3-8B",
+      "use_official_template": true
+    },
+    "llama": {
+      "model_path": "meta-llama/Llama-3.1-8B-Instruct"
+    },
+    "training": {
+      "output_dir": "./models/improved",
+      "batch_size": 4,
+      "gradient_accumulation_steps": 4,
+      "learning_rate": 1e-5,
+      "epochs": 3,
+      "logging_steps": 10,
+      "save_steps": 100,
+      "save_total_limit": 3,
+      "weight_decay": 0.01,
+      "warmup_steps": 100
+    },
+    "evaluation": {
+      "improved_model_path": "",
+      "results_dir": "./results/evaluation",
+      "max_eval_samples": 1000
+    },
+    "experiment": {
+      "process_split": "train",
+      "process_sample_size": 5000,
+      "results_dir": "./results/experiment"
+    }
+  }
