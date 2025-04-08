@@ -401,16 +401,19 @@ class DatasetManager:
             for split, ds in (dataset.items() if isinstance(dataset, DatasetDict) else [("train", dataset)]):
                 # Map from lmsys toxic chat format to our research format
                 def map_toxic_chat(example):
-                    # Extract query from conversation
-                    query = example["conversations"][0]["value"] if len(example["conversations"]) > 0 else ""
+                    # Based on SQL output, use user_input instead of conversations
+                    query = example.get("user_input", "")
                     
-                    # Determine label based on toxicity
-                    is_unsafe = example.get("toxic", False)
+                    # Determine label based on toxicity field (1 = toxic, 0 = not toxic)
+                    is_unsafe = example.get("toxicity", 0) > 0
+                    
+                    # Get the reason from openai_moderation if available
+                    reason = example.get("openai_moderation", "") 
                     
                     return {
                         "input": query,
                         "label": "unsafe" if is_unsafe else "safe",
-                        "reason": example.get("category", "") if is_unsafe else ""
+                        "reason": reason
                     }
                 
                 result[split] = ds.map(map_toxic_chat)
