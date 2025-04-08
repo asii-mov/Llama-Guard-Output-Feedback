@@ -32,6 +32,7 @@ from transformers import (
     Trainer,
     DataCollatorForLanguageModeling
 )
+from peft import prepare_model_for_kbit_training, LoraConfig, get_peft_model, TaskType
 from datasets import Dataset, load_dataset, DatasetDict, concatenate_datasets
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, precision_recall_fscore_support
@@ -589,10 +590,24 @@ class LlamaGuardTrainer:
         
         # Create output directory if it doesn't exist
         os.makedirs(self.output_dir, exist_ok=True)
+        
+        # LlamaGuard categories for formatting training data
+        self.categories = [
+            "O1: Violence and Hate",
+            "O2: Sexual Content",
+            "O3: Criminal Planning",
+            "O4: Guns and Illegal Weapons",
+            "O5: Regulated or Controlled Substances",
+            "O6: Self-Harm",
+            "I1: Platform Manipulation",
+            "I2: Economic Harm",
+            "I3: Fraud and Deception",
+            "I4: Malware and Security"
+        ]
     
     def fine_tune(self) -> str:
         """
-        Fine-tune Llama Guard on blocked inputs.
+        Fine-tune Llama Guard on blocked inputs using LoRA.
         
         Returns:
             Path to the fine-tuned model
@@ -608,6 +623,10 @@ class LlamaGuardTrainer:
         # Load model and tokenizer
         tokenizer = AutoTokenizer.from_pretrained(self.base_model_path)
         
+        # Make sure the tokenizer has a pad token
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        
         # Load model with 4-bit quantization for training
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -622,6 +641,25 @@ class LlamaGuardTrainer:
             trust_remote_code=True,
             quantization_config=bnb_config
         )
+        
+        # Prepare the model for kbit training
+        model = prepare_model_for_kbit_training(model)
+        
+        # Define LoRA configuration
+        lora_config = LoraConfig(
+            r=16,                     # Rank
+            lora_alpha=32,            # Alpha parameter for LoRA scaling
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],  # Attention layers to adapt
+            lora_dropout=0.05,        # Dropout probability for LoRA layers
+            bias="none",              # Can be "none", "all" or "lora_only"
+            task_type=TaskType.CAUSAL_LM  # Task type
+        )
+        
+        # Add LoRA adapters to model
+        model = get_peft_model(model, lora_config)
+        
+        # Print trainable parameters info
+        model.print_trainable_parameters()
         
         # Prepare training arguments
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -643,29 +681,53 @@ class LlamaGuardTrainer:
             lr_scheduler_type="cosine",
             # Set seed for training reproducibility
             seed=seed,
-            data_seed=seed
+            data_seed=seed,
+            # Add additional args for PEFT training
+            remove_unused_columns=False,
+            gradient_checkpointing=True
         )
         
-        # Prepare data collator
+        # Format training data
+        def formatting_func(example):
+            # Format the prompt as we do for inference
+            prompt = f"<|im_start|>system\nYou are a content moderation assistant. Determine if the following user prompt is safe or unsafe.\n<|im_end|>\n<|im_start|>user\nUser Prompt: {example['input']}\n\nIs this prompt safe or unsafe?<|im_end|>\n<|im_start|>assistant\n"
+            
+            # Add expected completion
+            if example["label"] == "unsafe":
+                category = example.get("reason", "O1").split(":")[0].strip()
+                if not any(c.startswith(category) for c in self.categories) and len(category) <= 2:
+                    category = "O1"  # Default to Violence and Hate if no valid category
+                completion = f"UNSAFE {category}"
+            else:
+                completion = "SAFE"
+                
+            prompt += completion
+            
+            return {"text": prompt}
+        
+        # Apply formatting to dataset
+        formatted_dataset = train_dataset.map(formatting_func)
+        
+        # Prepare data collator for language modeling
         data_collator = DataCollatorForLanguageModeling(
             tokenizer=tokenizer,
-            mlm=False,
+            mlm=False
         )
         
         # Create trainer
         trainer = Trainer(
             model=model,
             args=training_args,
-            train_dataset=train_dataset,
+            train_dataset=formatted_dataset,
             data_collator=data_collator,
-            tokenizer=tokenizer,
+            tokenizer=None  # Avoid deprecation warning by not passing tokenizer
         )
         
         # Train
         trainer.train()
         
         # Save model
-        trainer.save_model(output_dir)
+        model.save_pretrained(output_dir)
         tokenizer.save_pretrained(output_dir)
         
         logger.info(f"Fine-tuning complete, model saved to {output_dir}")
