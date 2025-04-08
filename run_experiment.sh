@@ -42,6 +42,7 @@ export CUDA_LAUNCH_BLOCKING=1
 echo "Checking model access..."
 python -c "
 import json
+from typing import Dict, Any
 from huggingface_hub import model_info
 with open('$CONFIG_PATH', 'r') as f:
     config = json.load(f)

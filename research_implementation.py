@@ -1,3 +1,4 @@
+from typing import Dict, Any
 class Evaluator:
     """Evaluates default model against rule-based approach using collected examples."""
     
