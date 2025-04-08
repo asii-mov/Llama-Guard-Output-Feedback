@@ -3,6 +3,7 @@
     "mode": "process",
     "dataset": {
       "path": "lmsys/toxic-chat",
+      "config": "toxicchat0124",
       "split_ratios": {
         "train": 0.7,
         "test": 0.15,

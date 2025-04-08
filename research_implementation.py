@@ -1,4 +1,4 @@
- #!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Llama Guard Improvement Research Project
 
@@ -358,7 +358,14 @@ class DatasetManager:
                     self._split_and_save_dataset(full_dataset, seed=seed)
             else:
                 # Try loading as a Hugging Face dataset
-                raw_dataset = load_dataset(self.dataset_path)
+                dataset_config = self.config["dataset"].get("config", None)
+                logger.info(f"Loading dataset {self.dataset_path}" + (f" with config {dataset_config}" if dataset_config else ""))
+                
+                if dataset_config:
+                    raw_dataset = load_dataset(self.dataset_path, dataset_config)
+                else:
+                    raw_dataset = load_dataset(self.dataset_path)
+                
                 if isinstance(raw_dataset, DatasetDict) and "train" in raw_dataset:
                     # Dataset already has splits
                     self.dataset = raw_dataset
