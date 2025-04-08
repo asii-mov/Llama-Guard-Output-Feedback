@@ -195,20 +195,20 @@ Respond only with "SAFE" or "UNSAFE [CATEGORY_CODE]" based on your analysis.
         }
 
 class Llama8BModel:
-    """Llama 3.1 8B model for generating responses."""
+    """Llama or Mistral model for generating responses."""
     
     def __init__(self, model_path: str, device: str = "cuda"):
         """
-        Initialize Llama 3.1 8B model.
+        Initialize Llama or Mistral model.
         
         Args:
-            model_path: Path to the Llama 3.1 8B model
+            model_path: Path to the model
             device: Device to run model on ("cuda" or "cpu")
         """
         self.model_path = model_path
         self.device = device
         
-        logger.info(f"Initializing Llama 3.1 8B from {model_path}")
+        logger.info(f"Initializing model from {model_path}")
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         
         # Load model with 4-bit quantization for efficiency
@@ -225,10 +225,15 @@ class Llama8BModel:
             trust_remote_code=True,
             quantization_config=bnb_config
         )
-        logger.info("Llama 3.1 8B model loaded successfully")
+        logger.info(f"Model loaded successfully")
         
-        # Simple chat template
-        self.template = """<|im_start|>system
+        # Set chat template based on model
+        if "mistral" in model_path.lower():
+            # Mistral chat template
+            self.template = """<s>[INST] {query} [/INST]"""
+        else:
+            # Llama chat template
+            self.template = """<|im_start|>system
 You are a helpful, harmless, and honest AI assistant.
 <|im_end|>
 <|im_start|>user
@@ -243,7 +248,7 @@ You are a helpful, harmless, and honest AI assistant.
         
     def generate_response(self, query: str) -> str:
         """
-        Generate a response from the Llama 3.1 8B model.
+        Generate a response from the model.
         
         Args:
             query: User query
@@ -254,26 +259,31 @@ You are a helpful, harmless, and honest AI assistant.
         start_time = time.time()
         self.total_inferences += 1
         
-        # Format query with our template
+        # Format query with template
         formatted_prompt = self.template.format(query=query)
         
         # Tokenize and generate response
         inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.device)
+        
+        # Check for special tokens
+        gen_kwargs = {
+            "max_new_tokens": 256,
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "do_sample": True,
+        }
+        
+        # Add proper pad token if needed
+        if self.tokenizer.pad_token_id is None:
+            gen_kwargs["pad_token_id"] = self.tokenizer.eos_token_id
+            
         outputs = self.model.generate(
             inputs.input_ids,
-            max_new_tokens=256,
-            temperature=0.7,
-            top_p=0.9,
-            do_sample=True
+            **gen_kwargs
         )
         
         # Decode response
-        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
-        # Extract assistant's response
-        if "<|im_start|>assistant" in response:
-            response = response.split("<|im_start|>assistant")[-1]
-        
+        response = self.tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
         response = response.strip()
         
         # Update average inference time
@@ -310,7 +320,7 @@ class DatasetManager:
         # Create store directory if it doesn't exist
         os.makedirs(self.store_dir, exist_ok=True)
         
-        # Load Anthropic red teaming dataset
+        # Load dataset
         logger.info(f"Loading dataset from {self.dataset_path}")
         self.load_dataset()
         
@@ -322,7 +332,7 @@ class DatasetManager:
             logger.info(f"Loaded {len(self.blocked_inputs)} previously blocked inputs")
     
     def load_dataset(self) -> None:
-        """Load and split the Anthropic red teaming dataset."""
+        """Load and split the dataset."""
         try:
             # Get seed from config for reproducible splits
             seed = self.config.get("seed", 42)
@@ -353,14 +363,84 @@ class DatasetManager:
                 if isinstance(raw_dataset, DatasetDict) and "train" in raw_dataset:
                     # Dataset already has splits
                     self.dataset = raw_dataset
+                    
+                    # Process the dataset to adapt it to our format
+                    self.dataset = self._process_dataset(self.dataset)
                 else:
                     # Create splits
-                    self._split_and_save_dataset(raw_dataset["train"] if "train" in raw_dataset else raw_dataset, seed=seed)
+                    ds = raw_dataset["train"] if "train" in raw_dataset else raw_dataset
+                    ds = self._process_dataset({"train": ds})["train"]
+                    self._split_and_save_dataset(ds, seed=seed)
                 
             logger.info(f"Dataset loaded and split: {self.dataset}")
         except Exception as e:
             logger.error(f"Error loading dataset: {e}")
             raise
+    
+    def _process_dataset(self, dataset: Union[Dataset, DatasetDict]) -> Union[Dataset, DatasetDict]:
+        """
+        Process dataset to adapt to our research format.
+        
+        Args:
+            dataset: Raw dataset
+            
+        Returns:
+            Processed dataset
+        """
+        # Adapt based on dataset type
+        if "lmsys/toxic-chat" in self.dataset_path:
+            logger.info("Processing lmsys/toxic-chat dataset")
+            
+            result = {}
+            for split, ds in dataset.items():
+                # Map from lmsys toxic chat format to our research format
+                def map_toxic_chat(example):
+                    # Extract query from conversation
+                    query = example["conversations"][0]["value"] if len(example["conversations"]) > 0 else ""
+                    
+                    # Determine label based on toxicity
+                    is_unsafe = example.get("toxic", False)
+                    
+                    return {
+                        "input": query,
+                        "label": "unsafe" if is_unsafe else "safe",
+                        "reason": example.get("category", "") if is_unsafe else ""
+                    }
+                
+                result[split] = ds.map(map_toxic_chat)
+            
+            return DatasetDict(result) if isinstance(dataset, DatasetDict) else result["train"]
+        else:
+            # Default processing
+            logger.info("Using default dataset processing")
+            
+            result = {}
+            for split, ds in (dataset.items() if isinstance(dataset, DatasetDict) else [("train", dataset)]):
+                # Try to adapt to our research format
+                def map_default(example):
+                    # Extract input field (adjust based on actual structure)
+                    input_text = example.get("prompt", example.get("text", example.get("input", "")))
+                    
+                    # Try to determine label
+                    label = example.get("label", example.get("is_harmful", example.get("is_unsafe", "safe")))
+                    if isinstance(label, bool):
+                        label = "unsafe" if label else "safe"
+                    elif not isinstance(label, str):
+                        # Default to safe if we can't determine
+                        label = "safe"
+                    
+                    # Try to extract reason if available
+                    reason = example.get("reason", example.get("category", ""))
+                    
+                    return {
+                        "input": input_text,
+                        "label": label,
+                        "reason": reason
+                    }
+                
+                result[split] = ds.map(map_default)
+            
+            return DatasetDict(result) if isinstance(dataset, DatasetDict) else result["train"]
     
     def _split_and_save_dataset(self, full_dataset: Dataset, seed: int = 42) -> None:
         """

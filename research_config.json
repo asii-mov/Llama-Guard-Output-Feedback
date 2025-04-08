@@ -2,7 +2,7 @@
     "seed": 42,
     "mode": "process",
     "dataset": {
-      "path": "Anthropic/red-team-attempts",
+      "path": "lmsys/toxic-chat",
       "split_ratios": {
         "train": 0.7,
         "test": 0.15,
@@ -11,12 +11,15 @@
       "store_dir": "./data/dataset"
     },
     "llama_guard": {
-      "default_model_path": "meta-llama/Meta-Llama-Guard-3-8B",
-      "base_model_path": "meta-llama/Meta-Llama-Guard-3-8B",
+      "default_model_path": "meta-llama/LlamaGuard-7b",
+      "base_model_path": "meta-llama/LlamaGuard-7b",
       "use_official_template": true
     },
     "llama": {
-      "model_path": "meta-llama/Llama-3.1-8B-Instruct"
+      "model_path": "mistralai/Mistral-7B-Instruct-v0.3",
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "max_tokens": 1024
     },
     "training": {
       "output_dir": "./models/improved",
