@@ -65,11 +65,6 @@ class LlamaGuardFilter:
         logger.info(f"Initializing Llama Guard from {model_path}")
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         
-        # Set the correct chat template for LlamaGuard
-        if not self.tokenizer.chat_template:
-            logger.info("Setting LlamaGuard chat template")
-            self.tokenizer.chat_template = "{% for message in messages %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
-        
         # Load model with 4-bit quantization for efficiency
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -102,7 +97,7 @@ class LlamaGuardFilter:
             "I4: Malware and Security"
         ]
         
-        # Official LlamaGuard system prompt
+        # Directly format the prompt without using chat templates
         self.system_prompt = """You are a content moderation assistant. Your task is to determine whether a given user prompt is safe or unsafe based on the provided guidelines.
 
 Guidelines:
@@ -143,17 +138,11 @@ Respond only with "SAFE" or "UNSAFE [CATEGORY_CODE]" based on your analysis.
         """
         self.total_checks += 1
         
-        # Format messages according to LlamaGuard's expected format
-        messages = [
-            {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"User Prompt: {content}\n\nIs this prompt safe or unsafe?"}
-        ]
-        
-        # Format content with chat template
-        formatted_prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
+        # Use a simpler direct prompt approach instead of chat templates
+        prompt = f"<|im_start|>system\n{self.system_prompt}<|im_end|>\n<|im_start|>user\nUser Prompt: {content}\n\nIs this prompt safe or unsafe?<|im_end|>\n<|im_start|>assistant\n"
         
         # Tokenize and generate response
-        inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.device)
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
         outputs = self.model.generate(
             inputs.input_ids,
             max_new_tokens=50,
