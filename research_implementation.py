@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+ #!/usr/bin/env python3
 """
 Llama Guard Improvement Research Project
 
@@ -8,7 +8,7 @@ but gets blocked at output, then use this data to improve the input filter.
 
 Architecture:
 - Input safeguard: Llama Guard
-- Model: Llama 3.1 8B
+- Model: Mistral or Llama model
 - Output safeguard: Llama Guard
 """
 
@@ -21,10 +21,9 @@ import datetime
 import numpy as np
 import pandas as pd
 import torch
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple, Any, Optional, Union
 from pathlib import Path
 from tqdm import tqdm
-import torch
 from transformers import (
     AutoTokenizer, 
     AutoModelForCausalLM, 
@@ -33,7 +32,7 @@ from transformers import (
     Trainer,
     DataCollatorForLanguageModeling
 )
-from datasets import Dataset, load_dataset, DatasetDict
+from datasets import Dataset, load_dataset, DatasetDict, concatenate_datasets
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, precision_recall_fscore_support
 
@@ -184,7 +183,7 @@ Respond only with "SAFE" or "UNSAFE [CATEGORY_CODE]" based on your analysis.
             reason = ""
             
         return is_safe, reason
-        
+    
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about the filter's performance."""
         return {
@@ -392,7 +391,7 @@ class DatasetManager:
             logger.info("Processing lmsys/toxic-chat dataset")
             
             result = {}
-            for split, ds in dataset.items():
+            for split, ds in (dataset.items() if isinstance(dataset, DatasetDict) else [("train", dataset)]):
                 # Map from lmsys toxic chat format to our research format
                 def map_toxic_chat(example):
                     # Extract query from conversation
@@ -860,6 +859,14 @@ class ResearchSystem:
         
         # Initialize components
         self.dataset_manager = DatasetManager(self.config)
+        
+        # Initialize filters and model if in process mode
+        if self.config["mode"] == "process":
+            self.input_filter = LlamaGuardFilter(self.config["llama_guard"]["default_model_path"])
+            self.llm = Llama8BModel(self.config["llama"]["model_path"])
+            self.output_filter = LlamaGuardFilter(self.config["llama_guard"]["default_model_path"])
+        
+        logger.info("Research system initialized")
     
     def _set_seed(self, seed: int) -> None:
         """
@@ -871,17 +878,10 @@ class ResearchSystem:
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
         # Set Python hash seed for reproducible dict iterations
         os.environ['PYTHONHASHSEED'] = str(seed)
-        
-        # Initialize filters and model if in process mode
-        if self.config["mode"] == "process":
-            self.input_filter = LlamaGuardFilter(self.config["llama_guard"]["default_model_path"])
-            self.llm = Llama8BModel(self.config["llama"]["model_path"])
-            self.output_filter = LlamaGuardFilter(self.config["llama_guard"]["default_model_path"])
-        
-        logger.info("Research system initialized")
     
     def process_query(self, query: str) -> Tuple[str, bool, bool, str]:
         """
@@ -900,7 +900,7 @@ class ResearchSystem:
         if not input_safe:
             return "", False, False, input_reason
         
-        # Generate response with Llama 3.1 8B
+        # Generate response with model
         response = self.llm.generate_response(query)
         
         # Check output with Llama Guard
