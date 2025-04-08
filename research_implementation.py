@@ -703,12 +703,16 @@ class LlamaGuardTrainer:
                 
             prompt += completion
             
-            return {"text": prompt}
+            # Tokenize the text directly
+            tokenized = tokenizer(prompt, truncation=True, max_length=512)
+            
+            # Return tokenized data with input_ids and attention_mask
+            return tokenized
         
         # Apply formatting to dataset
         formatted_dataset = train_dataset.map(formatting_func)
         
-        # Prepare data collator for language modeling
+        # Use a standard data collator for language modeling
         data_collator = DataCollatorForLanguageModeling(
             tokenizer=tokenizer,
             mlm=False

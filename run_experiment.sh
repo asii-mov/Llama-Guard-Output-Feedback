@@ -32,7 +32,7 @@ fi
 
 # Check for required Python packages
 echo "Checking required packages..."
-pip install -q transformers datasets torch bitsandbytes tqdm pandas scikit-learn accelerate peft huggingface-hub protobuf sentencepiece
+pip install -q transformers datasets torch bitsandbytes tqdm pandas scikit-learn accelerate peft sentencepiece protobuf
 
 # Set the seed environment variable for extra reproducibility
 export PYTHONHASHSEED=42
