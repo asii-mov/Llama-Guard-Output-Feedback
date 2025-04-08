@@ -986,7 +986,7 @@ class ResearchSystem:
     
     def evaluate_models(self) -> Dict[str, Any]:
         """
-        Evaluate default and improved Llama Guard models.
+        Evaluate default model against rule-based approach using collected examples.
         
         Returns:
             Evaluation results
@@ -1013,10 +1013,10 @@ class ResearchSystem:
         )
         results["process_stats"] = process_stats
         
-        # Step 2: Train improved model
+        # Step 2: Save examples as a dataset for evaluation
         logger.info("Step 2: Training improved Llama Guard model")
-        improved_model_path = self.train_improved_model()
-        results["improved_model_path"] = improved_model_path
+        improved_examples_dir = self.train_improved_model()
+        results["improved_examples_dir"] = improved_examples_dir
         
         # Step 3: Evaluate models
         logger.info("Step 3: Evaluating default and improved models")
