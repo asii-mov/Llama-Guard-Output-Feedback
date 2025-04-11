@@ -837,8 +837,16 @@ class LlamaGuardTrainer:
         logger.info("Tokenizing formatted examples")
         tokenized_examples = []
         for example in formatted_examples:
-            inputs = tokenizer(example, return_tensors="pt", truncation=True, max_length=2048)
+            # Update the tokenizer call to include padding
+            inputs = tokenizer(
+                example, 
+                return_tensors="pt", 
+                padding='max_length',
+                truncation=True, 
+                max_length=2048
+            )
             labels = inputs["input_ids"].clone()
+
             
             # Set labels for input tokens (non-output) to -100 so they're not included in loss
             # Find the assistant tag location
@@ -886,12 +894,18 @@ class LlamaGuardTrainer:
             gradient_checkpointing=True
         )
         
+        data_collator = DataCollatorForLanguageModeling(
+            tokenizer=tokenizer,
+            mlm=False
+        )
+
         # Step 8: Initialize trainer
         trainer = Trainer(
             model=model,
             args=training_args,
             train_dataset=train_dataset,
-            tokenizer=tokenizer
+            tokenizer=tokenizer,
+            data_collator=data_collator
         )
         
         # Step 9: Train
