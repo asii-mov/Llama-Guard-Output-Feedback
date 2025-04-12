@@ -555,12 +555,15 @@ class DatasetManager:
             full_dataset: Full dataset to split
             seed: Random seed for reproducibility
         """
+        # Convert HuggingFace dataset to a list for compatibility with scikit-learn
+        dataset_list = full_dataset.to_list()
+        
         # First split: train + rest
         train_ratio = self.split_ratios["train"]
         test_val_ratio = self.split_ratios["test"] + self.split_ratios["validation"]
         
-        train_dataset, rest_dataset = train_test_split(
-            full_dataset, 
+        train_data, rest_data = train_test_split(
+            dataset_list, 
             test_size=test_val_ratio / (train_ratio + test_val_ratio),
             random_state=seed
         )
@@ -568,16 +571,16 @@ class DatasetManager:
         # Second split: test + validation
         test_ratio = self.split_ratios["test"] / test_val_ratio
         
-        test_dataset, validation_dataset = train_test_split(
-            rest_dataset,
+        test_data, validation_data = train_test_split(
+            rest_data,
             test_size=1 - test_ratio,
             random_state=seed
         )
         
         # Convert back to Dataset objects
-        train_dataset = HFDataset.from_dict(train_dataset)
-        test_dataset = HFDataset.from_dict(test_dataset)
-        validation_dataset = HFDataset.from_dict(validation_dataset)
+        train_dataset = HFDataset.from_list(train_data)
+        test_dataset = HFDataset.from_list(test_data)
+        validation_dataset = HFDataset.from_list(validation_data)
         
         # Create DatasetDict
         self.dataset = DatasetDict({
@@ -593,6 +596,8 @@ class DatasetManager:
         validation_dataset.to_json(os.path.join(self.store_dir, "validation.jsonl"))
         
         logger.info(f"Dataset split and saved: train={len(train_dataset)}, test={len(test_dataset)}, validation={len(validation_dataset)}")
+        
+    
     
     def store_blocked_input(self, query: str, input_safe: bool, output_safe: bool, reason: str) -> None:
         """
