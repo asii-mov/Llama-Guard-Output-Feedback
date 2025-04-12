@@ -450,14 +450,25 @@ class DatasetManager:
                 else:
                     raw_dataset = load_dataset(self.dataset_path)
                 
-                if isinstance(raw_dataset, DatasetDict) and "train" in raw_dataset:
-                    # Dataset already has splits
-                    self.dataset = raw_dataset
+                # NEW CODE: Always combine all splits and create fresh splits
+                if isinstance(raw_dataset, DatasetDict):
+                    logger.info("Combining all splits from the dataset and creating fresh train/test/validation splits")
+                    # Process each split
+                    processed_splits = self._process_dataset(raw_dataset)
                     
-                    # Process the dataset to adapt it to our format
-                    self.dataset = self._process_dataset(self.dataset)
+                    # Combine all processed splits into a single dataset
+                    combined_data = []
+                    for split_name, split_data in processed_splits.items():
+                        # Convert to list to manipulate easily
+                        split_list = split_data.to_list()
+                        combined_data.extend(split_list)
+                    
+                    # Create a unified dataset for splitting
+                    full_dataset = HFDataset.from_list(combined_data)
+                    # Split the combined dataset
+                    self._split_and_save_dataset(full_dataset, seed=seed)
                 else:
-                    # Create splits
+                    # Handle single dataset case
                     ds = raw_dataset["train"] if "train" in raw_dataset else raw_dataset
                     ds = self._process_dataset({"train": ds})["train"]
                     self._split_and_save_dataset(ds, seed=seed)
@@ -466,6 +477,7 @@ class DatasetManager:
         except Exception as e:
             logger.error(f"Error loading dataset: {e}")
             raise
+
     
     def _process_dataset(self, dataset: Union[HFDataset, DatasetDict]) -> Union[HFDataset, DatasetDict]:
         """
