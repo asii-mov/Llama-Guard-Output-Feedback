@@ -1,7 +1,5 @@
 # Llama Guard Improvement via Output-Feedback Training
 
-## Project Description
-
 This project explores a method to improve LLM safeguards, specifically Meta's Llama Guard, by incorporating a learning mechanism. Standard safeguards often act as simple input/output gates (block/allow). This project investigates whether Llama Guard's *input* filtering capabilities can be enhanced by training it on prompts that previously led to blocked *outputs*.
 
 The core idea: If a prompt is initially deemed safe by Llama Guard but the resulting LLM response is blocked by Llama Guard, that initial prompt can be used as negative training data. This aims to teach the input filter to identify and block potentially problematic prompts earlier, preventing the generation of harmful content downstream.
