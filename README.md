@@ -2,6 +2,8 @@
 
 This project explores a method to improve LLM safeguards, specifically Meta's Llama Guard, by incorporating a learning mechanism. Standard safeguards often act as simple input/output gates (block/allow). This project investigates whether Llama Guard's *input* filtering capabilities can be enhanced by training it on prompts that previously led to blocked *outputs*.
 
+![diagram](https://github.com/user-attachments/assets/141a6fdf-dfa8-44fe-9aba-87b760bea983)
+
 The core idea: If a prompt is initially deemed safe by Llama Guard but the resulting LLM response is blocked by Llama Guard, that initial prompt can be used as negative training data. This aims to teach the input filter to identify and block potentially problematic prompts earlier, preventing the generation of harmful content downstream.
 
 This repository contains the implementation (`research_implementation.py` ) and configuration (`research_config.json` ) for running experiments to test this hypothesis, using the Llama Guard finetuning techniques adapted from the official Llama cookbooks (`finetuning_data_formatter.py` ).
