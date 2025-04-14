@@ -67,6 +67,7 @@ Initial experiments attempting to fine-tune Llama Guard using this output-feedba
 * **Likely Cause:** The poor performance likely stems from a mismatch between the training data/objective and Llama Guard's intended function. Fine-tuning solely on prompts labeled "unsafe" based on the *potential future output* (which isn't present during the input check) seems to teach the model spurious correlations rather than robustly identifying inherently unsafe prompts according to the defined categories. Training the model on this specific subset of data appears to create a strong bias, hindering its ability to correctly classify safe inputs.
 
 Further experimentation is needed. Potential next steps include:
+* Reviewing the code for any faults in implementation or logic errors in the code
 * Adjusting the balance and selection of safe vs. unsafe examples during fine-tuning.
 * Analyzing the characteristics of the prompts collected in `blocked_inputs.jsonl` to better understand why they lead to unsafe outputs.
 * Exploring different training objectives or architectures instead of directly fine-tuning Llama Guard for this predictive task.
